@@ -35,6 +35,24 @@ final class Model {
   private(set) var establishments: [Establishment] = []
   
   func refresh() async throws {
-
+    let query = CKQuery(
+      recordType: "\(Establishment.self)",
+      predicate: .init(value: true))
+    
+    let database = CKContainer.default().publicCloudDatabase
+    let records = try await database.records(matching: query)
+      .matchResults.map { try $1.get() }
+    
+    establishments = try await withThrowingTaskGroup(of: Establishment.self, body: { group in
+      for record in records {
+        if let establisment = try await Establishment(record: record, database: database) {
+          group.addTask { establisment }
+        }
+      }
+      
+      return try await group.reduce(into: [], { partialResult, entity in
+        partialResult.append(entity)
+      })
+    })
   }
 }
